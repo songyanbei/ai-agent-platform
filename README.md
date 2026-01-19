@@ -87,7 +87,7 @@ ai-agent-platform/
 - 📝 生成带引用的总结报告
 
 **API**：
-- `POST /api/v2/query` - 查询接口
+- `POST /api/v2/query` - 查询接口（[API 文档](API_V2_SPECIFICATION.md)）
 
 **文档**：[agents/zhiku/README.md](agents/zhiku/README.md)
 
