@@ -1,0 +1,96 @@
+# 知识库检索
+
+用于检索个人知识库，支持向量检索、关键词检索、混合检索，支持自定义重排模型。
+cURL
+
+```
+curl --request POST \ --url https://open.bigmodel.cn/api/llm-application/open/knowledge/retrieve \ --header 'Authorization: Bearer <token>' \ --header 'Content-Type: application/json' \ --data ' { "query": "<string>", "knowledge_ids": [ "<string>" ], "request_id": "<string>", "document_ids": [ "<string>" ], "top_k": 123, "top_n": 123, "recall_method": "mixed", "recall_ratio": 80, "rerank_status": 0, "rerank_model": "rerank", "fractional_threshold": 123 } '
+```
+
+
+```
+curl --request POST \ --url https://open.bigmodel.cn/api/llm-application/open/knowledge/retrieve \ --header 'Authorization: Bearer <token>' \ --header 'Content-Type: application/json' \ --data ' { "query": "<string>", "knowledge_ids": [ "<string>" ], "request_id": "<string>", "document_ids": [ "<string>" ], "top_k": 123, "top_n": 123, "recall_method": "mixed", "recall_ratio": 80, "rerank_status": 0, "rerank_model": "rerank", "fractional_threshold": 123 } '
+```
+
+
+```
+{ "data": [ { "text": "<string>", "score": 123, "metadata": { "_id": "<string>", "knowledge_id": "<string>", "doc_id": "<string>", "doc_name": "<string>", "doc_url": "<string>", "contextual_text": "<string>" } } ], "code": 123, "message": "<string>", "timestamp": 123 }
+```
+
+
+```
+{ "data": [ { "text": "<string>", "score": 123, "metadata": { "_id": "<string>", "knowledge_id": "<string>", "doc_id": "<string>", "doc_name": "<string>", "doc_url": "<string>", "contextual_text": "<string>" } } ], "code": 123, "message": "<string>", "timestamp": 123 }
+```
+
+
+#### Authorizations
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#authorization-authorization)
+https://bigmodel.cn/usercenter/proj-mgmt/apikeys使用以下格式进行身份验证：Bearer
+
+#### Body
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-query)
+查询内容，限制在1000字以内
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-knowledge-ids)
+知识库ID列表
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-request-id)
+请求唯一id，用于定位日志
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-document-ids)
+文档ID列表
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-top-k)
+最终召回数量，取值范围为[1~20]，默认为8
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-top-n)
+初始召回数量，取值范围为[1~100]，默认为10
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-recall-method)
+检索类型
+- embedding: 向量化检索
+- keyword:关键词检索
+- mixed: 混合检索（默认）
+
+```
+embedding
+```
+
+
+```
+keyword
+```
+
+
+```
+mixed
+```
+
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-recall-ratio)
+混合检索中向量检索的权重，取值范围(0~100)，默认为80
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-rerank-status)
+是否开启重排，0: 不开启，1: 开启，默认不开启
+
+```
+0
+```
+
+
+```
+1
+```
+
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-rerank-model)
+重排模型，支持rerank、rerank-pro
+
+```
+rerank
+```
+
+
+```
+rerank-pro
+```
+
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#body-fractional-threshold)
+相似度阈值，低于该阈值的切片会被过滤，取值范围为(0~1)
+
+#### Response
+业务处理成功
+[​](https://docs.bigmodel.cn/api-reference/%E7%9F%A5%E8%AF%86%E5%BA%93-api/%E7%9F%A5%E8%AF%86%E5%BA%93%E6%A3%80%E7%B4%A2#response-data)
+检索结果列表
+Hide child attributes
