@@ -91,8 +91,9 @@ ai-agent-platform/
 
 ## 📚 文档
 
+- **[开发指南](docs/DEVELOPMENT.md)** - 环境搭建、开发流程、部署指南
 - **[架构文档](docs/ARCHITECTURE.md)** - 系统架构和设计原则
-- **[开发指南](docs/AGENT_DEVELOPMENT_GUIDE.md)** - 如何开发新智能体
+- **[智能体开发](docs/AGENT_DEVELOPMENT_GUIDE.md)** - 如何开发新智能体
 - **[代码模板](docs/AGENT_TEMPLATE.md)** - 新智能体代码模板
 - **[API 规范](API_V2_SPECIFICATION.md)** - API 接口文档
 
