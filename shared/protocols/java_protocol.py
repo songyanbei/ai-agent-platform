@@ -20,7 +20,7 @@ class JavaEventType(str, Enum):
     PLAN_CHANGE = "PLAN_CHANGE"             # 规划变更
     INVOCATION_DECLARED = "INVOCATION_DECLARED"  # 声明调用
     INVOCATION_CHANGE = "INVOCATION_CHANGE"      # 调用变更
-    ARTIFACT = "ARTIFACT"                   # 产物
+    ARTIFACT_DECLARED = "ARTIFACT_DECLARED"                   # 产物声明
     ARTIFACT_CHANGE = "ARTIFACT_CHANGE"     # 产物变更
     END = "END"                             # 结束
 
@@ -391,7 +391,7 @@ def build_artifact(
         Dict: ARTIFACT 消息
     """
     return build_java_message(
-        event_type=JavaEventType.ARTIFACT,
+        event_type=JavaEventType.ARTIFACT_DECLARED,
         context={
             "mode": "plan-executor",
             "artifact_id": artifact_id,
