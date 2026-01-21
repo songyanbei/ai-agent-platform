@@ -1,0 +1,26 @@
+# 智能体注册配置
+# 用于管理和发现所有智能体
+
+agents:
+  zhiku:
+    enabled: true
+    name: "知识检索智能体"
+    version: "2.0.0"
+    description: "基于多知识库的智能检索和总结服务"
+    api_prefix: "/api/v2"
+    config_file: "agents/zhiku/config/knowledge_bases.json"
+    
+  # 未来的智能体示例
+  # code:
+  #   enabled: false
+  #   name: "代码生成智能体"
+  #   version: "1.0.0"
+  #   description: "智能代码生成和审查服务"
+  #   api_prefix: "/api/code"
+  
+  # chat:
+  #   enabled: false
+  #   name: "对话智能体"
+  #   version: "1.0.0"
+  #   description: "多轮对话和上下文理解服务"
+  #   api_prefix: "/api/chat"
