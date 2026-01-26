@@ -9,6 +9,7 @@ import httpx
 from config.settings import get_settings
 from shared.utils.logger import setup_logger
 from shared.utils.document_manager import DocumentManager
+from agents.zhiku.tools.file_ops import AVAILABLE_TOOLS, TOOL_FUNCTIONS
 
 logger = setup_logger("summary_agent")
 
@@ -21,7 +22,8 @@ class SummaryAgent:
     1. 接收已排序的文档
     2. 生成专业的带引用总结
     3. 流式输出内容
-    4. 不调用任何工具，专注于内容生成
+    3. 流式输出内容
+    4. 使用工具将总结保存到文件
     """
     
     def __init__(self):
@@ -50,6 +52,7 @@ class SummaryAgent:
         self,
         user_query: str,
         doc_manager: DocumentManager,
+        session_id: str,
         max_docs: int = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
@@ -80,7 +83,7 @@ class SummaryAgent:
         logger.info(f"📄 文档上下文长度: {len(context)} 字符")
         
         # 3. 构建总结提示词
-        system_prompt = """你是一个专业的研报分析师。你的任务是基于提供的文档生成高质量的分析报告。
+        system_prompt = f"""你是一个专业的研报分析师。你的任务是基于提供的文档生成高质量的分析报告。
 
 **核心要求**：
 1. **必须使用引用**：在答案中用 [1]、[2] 等标注信息来源
@@ -101,7 +104,12 @@ class SummaryAgent:
 3. **反欺诈检测**[1][3]：结合多源数据识别异常交易行为...
 
 ## 参考来源
-以上内容基于文档 [1] [2] [3] 的分析整理。"""
+以上内容基于文档 [1] [2] [3] 的分析整理。
+
+**重要指令**：
+生成完总结后，你必须调用 `write_file` 工具将总结内容保存到文件中。
+- session_id: {session_id}
+- content: (你刚刚生成的完整总结内容)"""
 
         user_message = f"""用户问题:{user_query}
 
@@ -109,7 +117,7 @@ class SummaryAgent:
 
 {context}
 
-请基于以上文档内容,详细回答用户问题。"""
+请基于以上文档内容,详细回答用户问题。回答完成后，请务必调用 write_file 工具保存结果。"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -127,11 +135,16 @@ class SummaryAgent:
                 model=self.model,
                 messages=messages,
                 stream=True,
-                temperature=0.7
+                temperature=0.7,
+                tools=AVAILABLE_TOOLS,
+                tool_choice="auto"
             )
             
-            # 收集完整内容
+            # 收集完整内容和工具调用
             full_content = ""
+            tool_calls = []
+            current_tool_call = None
+            write_file_called = False
 
             # 流式输出
             async for chunk in response:
@@ -140,6 +153,7 @@ class SummaryAgent:
 
                 delta = chunk.choices[0].delta
 
+                # 1. 处理文本内容
                 if delta.content:
                     content = delta.content
                     full_content += content
@@ -147,6 +161,69 @@ class SummaryAgent:
                         "type": "content",
                         "content": content
                     }
+
+                # 2. 处理工具调用
+                if delta.tool_calls:
+                    for tool_call_chunk in delta.tool_calls:
+                        if len(tool_calls) <= tool_call_chunk.index:
+                            # 新的工具调用
+                            tool_calls.append({
+                                "id": tool_call_chunk.id,
+                                "function": {
+                                    "name": tool_call_chunk.function.name,
+                                    "arguments": ""
+                                },
+                                "type": tool_call_chunk.type
+                            })
+                        
+                        # 追加参数
+                        if tool_call_chunk.function.arguments:
+                            tool_calls[tool_call_chunk.index]["function"]["arguments"] += tool_call_chunk.function.arguments
+
+            # 3. 处理流结束后的工具调用执行
+            for tool_call in tool_calls:
+                function_name = tool_call["function"]["name"]
+                arguments_str = tool_call["function"]["arguments"]
+                
+                logger.info(f"🛠️ 检测到工具调用: {function_name}")
+                
+                try:
+                    if function_name in TOOL_FUNCTIONS:
+                        function_args = json.loads(arguments_str)
+                        
+                        # 确保 session_id 正确
+                        # 1. 如果没传，强制赋值
+                        # 2. 如果传了但是是错的（比如 "{session_id}"），强制修正
+                        if "session_id" not in function_args or function_args["session_id"] == "{session_id}":
+                            logger.warning(f"⚠️ 工具参数 session_id 无效或缺失: {function_args.get('session_id')}, 已强制修正为: {session_id}")
+                            function_args["session_id"] = session_id
+                        
+                        # 如果内容为空，把累积的内容填进去 (防呆设计)
+                        if "content" not in function_args or not function_args["content"]:
+                            function_args["content"] = full_content
+
+                        # 执行工具
+                        tool_result = await TOOL_FUNCTIONS[function_name](**function_args)
+                        
+                        if function_name == "write_file":
+                            write_file_called = True
+                        
+                        logger.info(f"✅ 工具执行结果: {tool_result}")
+                        
+                        # 可以选择性地将工具结果通知给前端，或者只是记录
+                        
+                except Exception as e:
+                    logger.error(f"❌ 工具执行失败: {e}", exc_info=True)
+
+            # 4. 兜底机制：如果模型没有调用 write_file，强制调用
+            if not write_file_called and full_content.strip():
+                logger.warning("⚠️ 模型未调用 write_file，触发兜底机制强制保存")
+                try:
+                    tool_result = await TOOL_FUNCTIONS["write_file"](session_id=session_id, content=full_content)
+                    logger.info(f"✅ (兜底) 工具执行结果: {tool_result}")
+                except Exception as e:
+                    logger.error(f"❌ (兜底) 保存文件失败: {e}", exc_info=True)
+
 
             logger.info("✅ 总结生成完成")
 

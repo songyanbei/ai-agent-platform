@@ -103,16 +103,22 @@ async def web_search(query: str, num_results: int = 10) -> Dict[str, Any]:
             "Content-Type": "application/json"
         }
 
+        # payload = {
+        #     "search_query": query,
+        #     "search_engine": "search_pro_quark",
+        #     "search_intent": False,
+        #     "count": num_results,
+        #     "search_domain_filter": "<string>",
+        #     "search_recency_filter": "noLimit",
+        #     "content_size": "medium",
+        #     "request_id": "<string>",
+        #     "user_id": "<string>"
+        # }
         payload = {
-            "search_query": query,
-            "search_engine": "search_pro_quark",
-            "search_intent": False,
-            "count": num_results,
-            "search_domain_filter": "<string>",
-            "search_recency_filter": "noLimit",
-            "content_size": "medium",
-            "request_id": "<string>",
-            "user_id": "<string>"
+                "query": query,
+                "summary":  True,
+                "freshness": "noLimit",
+                "count": num_results
         }
         logger.info(payload)
         logger.info(headers)
@@ -129,17 +135,32 @@ async def web_search(query: str, num_results: int = 10) -> Dict[str, Any]:
 
             # 解析响应
             if response.status_code == 200:
-                data = response.json()
+                api_response = response.json()
 
                 results = []
-                # 根据实际 API 响应格式解析结果
-                # 这里假设 API 返回格式如下，需要根据实际 API 调整
-                for item in data.get("search_result", data.get("data", [])):
+
+                # 检查 API 响应的 code 字段
+                if api_response.get("code") != 200:
+                    logger.error(f"[失败] API 返回错误 code: {api_response.get('code')}, msg: {api_response.get('msg')}")
+                    return {
+                        "success": False,
+                        "error": f"API 错误: {api_response.get('msg', 'Unknown error')}",
+                        "query": query
+                    }
+
+                # 获取 data.webPages.value 中的搜索结果
+                data = api_response.get("data", {})
+                web_pages = data.get("webPages", {})
+                search_results = web_pages.get("value", [])
+
+                for item in search_results:
+                    # 优先使用 summary，如果不存在则使用 snippet
+                    content = item.get("summary") or item.get("snippet", "")
                     results.append({
-                        "title": item.get("title", "Unknown Title"),
-                        "url": item.get("url", item.get("link", "")),
-                        "content": item.get("content", item.get("description", item.get("abstract", ""))),
-                        "source": item.get("source", item.get("domain", ""))
+                        "title": item.get("name", "Unknown Title"),
+                        "url": item.get("url", ""),
+                        "content": content,
+                        "source": item.get("siteName", "")
                     })
 
                 logger.info(f"[成功] 网页搜索到 {len(results)} 个结果")

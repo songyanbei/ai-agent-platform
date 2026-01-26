@@ -38,7 +38,8 @@ class DualAgentOrchestrator:
     
     async def process(
         self,
-        user_query: str
+        user_query: str,
+        session_id: str  # 新增 session_id 参数
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         处理用户查询
@@ -248,7 +249,7 @@ class DualAgentOrchestrator:
             logger.info("📍 阶段3: 生成总结")
             
             # 调用总结智能体(流式,限制文档数量)
-            async for event in self.summary_agent.summarize(user_query, doc_manager, max_docs=MAX_DOCS_FOR_SUMMARY):
+            async for event in self.summary_agent.summarize(user_query, doc_manager, session_id, max_docs=MAX_DOCS_FOR_SUMMARY):
                 yield event
             
             logger.info("=" * 60)

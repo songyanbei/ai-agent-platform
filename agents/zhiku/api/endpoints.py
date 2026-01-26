@@ -39,11 +39,13 @@ router = APIRouter()
 class QueryRequest(BaseModel):
     """查询请求模型"""
     query: str
+    session_id: str  # 新增 session_id 字段
     
     class Config:
         json_schema_extra = {
             "example": {
-                "query": "分析人工智能在金融行业的应用趋势"
+                "query": "分析人工智能在金融行业的应用趋势",
+                "session_id": "session-001"
             }
         }
 
@@ -81,7 +83,7 @@ async def query_with_tools(request: QueryRequest):
                 yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
 
             # ========== 1. 调用三智能体协调器 ==========
-            async for event in orchestrator.process(query):
+            async for event in orchestrator.process(query, request.session_id):
                 event_type = event.get("type")
                 
                 # ========== 规划阶段 ==========

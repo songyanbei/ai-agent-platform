@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     # 智能体注册表
     agents_config: str = "config/agents.yaml"
     
+    # MinIO 配置
+    minio_endpoint: str = "play.min.io:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "agent-summaries"
+    minio_secure: bool = False
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

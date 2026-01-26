@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 from typing import List, Dict, Any
 import json
 import httpx
+import time
 
 from config.settings import get_settings, KnowledgeBaseConfig
 from shared.utils.logger import setup_logger
@@ -205,18 +206,21 @@ class PlanningAgent:
     ]
 }}
 
-请直接输出JSON,不要包含其他内容。"""
+请直接输出JSON,不要包含其他内容。
+ /no_think
+"""
 
         try:
             # 调用 DeepSeek 生成规划
+            start = time.time()
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"请为以下问题制定检索计划:\n{user_query}"}
                 ],
-                temperature=0.3,  # 降低温度,让规划更稳定
-                response_format={"type": "json_object"}  # 强制JSON输出
+                # temperature=0.3,  # 降低温度,让规划更稳定
+                # response_format={"type": "json_object"}  # 强制JSON输出
             )
             
             # 解析响应
@@ -227,7 +231,8 @@ class PlanningAgent:
             has_web_search = "web_search_plan" in plan
             logger.info(f"✅ 规划完成,选择了 {len(plan.get('retrieval_plan', []))} 个知识库, 网页搜索: {has_web_search}")
             logger.debug(f"规划详情: {json.dumps(plan, ensure_ascii=False, indent=2)}")
-            
+            end = time.time()
+            logger.info(end-start)
             return plan
             
         except json.JSONDecodeError as e:

@@ -1,8 +1,20 @@
 # AI 智能体平台 - 架构文档
 
+> **当前版本**: 2.0.0
+> **更新日期**: 2026-01-21
+
 ## 概述
 
-AI 智能体平台是一个可扩展的多智能体协作系统，支持在单一代码仓库中管理多个 AI 智能体，通过统一服务的不同端点访问。
+AI 智能体平台是一个可扩展的多智能体协作系统，基于 **FastAPI** 和 **异步编程** 构建。平台采用 **Orchestrator 模式** 协调多个专门的 LLM 智能体完成复杂任务，并通过 **Java 标准消息协议** 实现流式响应。
+
+### 核心特性
+
+- **多智能体编排**: 使用协调器模式管理规划、检索、总结等专门智能体
+- **流式响应**: 基于 SSE (Server-Sent Events) 的实时通信
+- **Java 标准协议**: 兼容 Java 后端定义的事件格式
+- **多知识库支持**: 支持配置多个 ZhipuAI 知识库
+- **网页搜索集成**: 可选的实时网络搜索能力
+- **智能去重**: 文档级别的去重和引用管理
 
 ---
 
@@ -15,18 +27,18 @@ AI 智能体平台是一个可扩展的多智能体协作系统，支持在单�
 
 ### 2. 共享基础设施
 - 通用代码存放在 `shared/` 目录
-- 协议、工具类和工具可复用
-- API 网关将请求路由到相应的智能体
+- 协议 (`shared/protocols/`)、工具类 (`shared/utils/`) 可复用
+- API 网关 (`shared/api/gateway.py`) 统一路由管理
 
-### 3. 统一服务
-- 单一 `main.py` 启动所有智能体
-- 所有智能体通过一个服务访问（不同路由）
-- 集中式日志、监控和配置管理
+### 3. 编排器模式
+- 使用 `DualAgentOrchestrator` 协调多个智能体的工作流程
+- 智能体之间通过异步生成器 (AsyncGenerator) 通信
+- 事件驱动的流式处理
 
-### 4. 可扩展性
-- 添加新智能体简单（复制模板，实现接口）
-- 通过 `config/agents.yaml` 注册智能体实现发现
-- 支持智能体版本管理
+### 4. Java 标准协议
+- 使用 Java 后端定义的消息格式
+- 支持多种事件类型：PLAN、INVOCATION、ARTIFACT、STREAM
+- 统一的上下文和状态管理
 
 ---
 
@@ -36,42 +48,43 @@ AI 智能体平台是一个可扩展的多智能体协作系统，支持在单�
 ai-agent-platform/
 │
 ├── main.py                           # 统一服务入口
+├── requirements.txt                  # Python 依赖
+├── .env / .env.example               # 环境变量配置
+│
 ├── config/                           # 全局配置
-│   ├── settings.py                   # 全局设置加载器
-│   └── agents.yaml                   # 智能体注册配置
+│   ├── settings.py                   # Pydantic 设置管理器
+│   ├── knowledge_bases.json          # 知识库配置（可选）
+│   └── agents.yaml                   # 智能体注册表
 │
 ├── shared/                           # 共享基础设施
 │   ├── protocols/                    # 消息协议
-│   │   ├── java_protocol.py          # Java 标准协议
-│   │   └── base_protocol.py          # 基础协议接口
+│   │   └── java_protocol.py          # Java 标准协议适配器
 │   ├── api/                          # API 网关
-│   │   └── gateway.py                # 主 API 路由器
-│   ├── utils/                        # 通用工具类
-│   │   ├── logger.py
-│   │   └── document_manager.py
-│   └── tools/                        # 共享工具
-│       └── base_tool.py
+│   │   └── gateway.py                # FastAPI 应用工厂
+│   └── utils/                        # 通用工具类
+│       ├── logger.py                 # 日志工具
+│       └── document_manager.py       # 文档管理器（去重/引用）
 │
 ├── agents/                           # 所有智能体
-│   ├── base_agent.py                 # 智能体基类接口
-│   │
-│   ├── zhiku/                        # 知识检索智能体
-│   │   ├── config.py
-│   │   ├── api/endpoints.py          # /api/v2/*
-│   │   ├── llm/
-│   │   │   ├── planning_agent.py
-│   │   │   ├── retrieval_agent.py
-│   │   │   ├── summary_agent.py
-│   │   │   └── orchestrator.py
-│   │   └── tools/
-│   │       └── knowledge_retrieval.py
-│   │
-│   └── [其他智能体]/
+│   └── zhiku/                        # 知识检索智能体（v2.0）
+│       ├── api/endpoints.py          # API 端点 (/api/v2/query)
+│       ├── llm/
+│       │   ├── planning_agent.py     # 规划智能体（DeepSeek）
+│       │   ├── retrieval_agent.py    # 检索智能体（ZhipuAI）
+│       │   ├── summary_agent.py      # 总结智能体（DeepSeek）
+│       │   └── dual_agent_orchestrator.py  # 编排器
+│       └── tools/
+│           ├── knowledge_retrieval.py  # 知识库检索工具
+│           └── web_search.py            # 网页搜索工具
+│
+├── docs/                             # 文档
+│   ├── ARCHITECTURE.md               # 架构文档（本文档）
+│   ├── AGENT_TEMPLATE.md             # 智能体开发模板
+│   └── DEVELOPMENT.md                # 开发指南
 │
 └── tests/                            # 测试
-    ├── shared/
-    ├── agents/
-    └── integration/
+    ├── shared/                       # 共享模块测试
+    └── agents/                       # 智能体测试
 ```
 
 ---
