@@ -374,7 +374,10 @@ class RetrievalAgent:
                     "query": query,
                     "success": result.get("success", False),
                     "doc_count": doc_count,
-                    "doc_metadata": doc_metadata  # 添加文档元数据
+                    "doc_metadata": [
+                        {**meta, "file_id": meta.get("doc_id"), "file_name": meta.get("title")} 
+                        for meta in doc_metadata
+                    ]  # 添加文档元数据，并映射 file_id 和 file_name
                 }
                 
             except Exception as e:

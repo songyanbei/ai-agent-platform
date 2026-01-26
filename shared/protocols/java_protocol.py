@@ -20,7 +20,7 @@ class JavaEventType(str, Enum):
     PLAN_CHANGE = "PLAN_CHANGE"             # 规划变更
     INVOCATION_DECLARED = "INVOCATION_DECLARED"  # 声明调用
     INVOCATION_CHANGE = "INVOCATION_CHANGE"      # 调用变更
-    ARTIFACT_DECLARED = "ARTIFACT_DECLARED"                   # 产物声明
+    ARTIFACT = "ARTIFACT"                   # 产物声明
     ARTIFACT_CHANGE = "ARTIFACT_CHANGE"     # 产物变更
     END = "END"                             # 结束
 
@@ -399,14 +399,14 @@ def build_artifact(
     data_type: str = "STRUCTURED"
 ) -> Dict[str, Any]:
     """
-    构建产物消息
+    构建产物消息（ARTIFACT）
     
     Args:
         stage_id: 阶段ID
         artifact_id: 产物ID
         artifact_name: 产物名称
         artifact_type: 产物类型
-        content: 产物内容
+        content: 产物内容（可能是路径或直接内容）
         source: 来源
         scope: 作用域（STAGE | GLOBAL）
         data_type: 数据类型（FILE | STRUCTURED）
@@ -415,16 +415,15 @@ def build_artifact(
         Dict: ARTIFACT 消息
     """
     return build_java_message(
-        event_type=JavaEventType.ARTIFACT_DECLARED,
+        event_type=JavaEventType.ARTIFACT,
         context={
             "mode": "plan-executor",
-            "artifact_id": artifact_id,
             "stage_id": stage_id
         },
         messages=[{
             "scope": scope,
-            "data_type": data_type,
             "source": source,
+            "artifact_id": artifact_id,
             "artifact_name": artifact_name,
             "artifact_type": artifact_type,
             "content": content

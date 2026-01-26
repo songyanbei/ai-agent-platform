@@ -152,19 +152,24 @@ async def query_with_tools(request: QueryRequest):
                     invocation_id = generate_invocation_id(kb_name, query_text, task_id)
                     
                     # 格式化结果内容为 JSON
-                    if success and doc_metadata:
+                    if success:
+                        # 统一结果结构
+                        unified_results = []
+                        for doc in doc_metadata:
+                            unified_results.append({
+                                "title": doc.get("title", ""),
+                                "url": "",
+                                "source": "",
+                                "doc_id": doc.get("doc_id", ""),
+                                "doc_name": doc.get("title", "")
+                            })
+
                         # 将文档元数据转换为 JSON 字符串
                         content = json.dumps({
                             "success": True,
-                            "doc_count": doc_count,
-                            "documents": doc_metadata
-                        }, ensure_ascii=False)
-                    elif success:
-                        # 成功但没有文档
-                        content = json.dumps({
-                            "success": True,
-                            "doc_count": 0,
-                            "message": "未检索到相关文档"
+                            "res_count": doc_count,
+                            "results": unified_results,
+                            "type": "knowledge_retrieval"
                         }, ensure_ascii=False)
                     else:
                         # 失败
@@ -227,10 +232,22 @@ async def query_with_tools(request: QueryRequest):
 
                     # 格式化结果
                     if result.get("success"):
+                        # 统一结果结构
+                        unified_results = []
+                        for item in result.get("results", []):
+                            unified_results.append({
+                                "title": item.get("title", ""),
+                                "url": item.get("url", ""),
+                                "source": item.get("source", ""),
+                                "doc_id": "",
+                                "doc_name": ""
+                            })
+
                         content = json.dumps({
                             "success": True,
-                            "result_count": result.get("count", 0),
-                            "query": query
+                            "res_count": result.get("count", 0),
+                            "results": unified_results,
+                            "type": "web_search"
                         }, ensure_ascii=False)
                     else:
                         content = json.dumps({
@@ -263,80 +280,40 @@ async def query_with_tools(request: QueryRequest):
                 
                 # ========== 参考文献（在总结前） ==========
                 elif event_type == "references":
-                    # 参考文献
-                    references = event.get("references", [])
-                    
-                    # 转换为 JSON 字符串
-                    content = json.dumps(references, ensure_ascii=False)
-                    
-                    # 1. 先发送参考文献 ARTIFACT 声明（内容为空）
-                    msg = build_artifact(
-                        stage_id="summary",
-                        artifact_id="references-001",
-                        artifact_name="参考文献",
-                        artifact_type="reference_list",
-                        content="",  # 初始内容为空
-                        source="知识库检索",
-                        scope="STAGE",
-                        data_type="STRUCTURED"
-                    )
-                    yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
-                    
-                    # 2. 再发送 ARTIFACT_CHANGE 包含实际内容
-                    msg = build_artifact_change(
-                        stage_id="summary",
-                        artifact_id="references-001",
-                        content=content,
-                        change_type="CONTENT_APPEND",
-                        artifact_name="参考文献",
-                        artifact_type="reference_list",
-                        source="知识库检索",
-                        scope="STAGE",
-                        data_type="STRUCTURED"
-                    )
-                    yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
-                    
                     # 3. 发送总结阶段开始状态
                     msg = build_plan_change_status("summary", StageStatus.RUNNING)
                     yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
                 
                 # ========== 总结阶段 ==========
                 elif event_type == "content":
-                    # 第一个 content 事件时，发送 ARTIFACT 声明
-                    if not hasattr(generate_events, "_summary_started"):
-                        # 发送 ARTIFACT 声明
-                        msg = build_artifact(
-                            stage_id="summary",
-                            artifact_id="summary-content-001",
-                            artifact_name="总结报告",
-                            artifact_type="summary_report",
-                            content="",  # 初始内容为空
-                            source="知识库检索",
-                            scope="STAGE",
-                            data_type="FILE"  # 修改为 FILE
-                        )
-                        yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
-                        generate_events._summary_started = True
-                    
-                    # 流式输出正文 - 使用 ARTIFACT_CHANGE
-                    msg = build_artifact_change(
-                        stage_id="summary",
-                        artifact_id="summary-content-001",
-                        content=event["content"],
-                        change_type="CONTENT_APPEND",
-                        scope="STAGE",
-                        data_type="FILE"  # 修改为 FILE
-                    )
+                    # 流式输出正文 - 使用 STREAM_CONTENT
+                    msg = build_stream_content(event["content"])
                     yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
                 
                 
                 # ========== 总结完成 ==========
                 elif event_type == "summary_complete":
-                    # 流式输出完整内容（逐字符）
-                    content = event["content"]
-                    for char in content:
-                        await asyncio.sleep(0.03)  # 30ms 延迟
-                        msg = build_stream_content(char)
+                    # 1. 确保最后的内容输出（如果有剩余）
+                    # summary_agent 已经在 content 事件里流式输出了，这里不需要再补
+                    
+                    # 2. 获取文件路径
+                    file_path = event.get("file_path", "")
+                    
+                    # 3. 发送 ARTIFACT 事件 (包含 MinIO 路径)
+                    # 只有当 file_path 存在时才发送
+                    if file_path:
+                        # 提取文件名
+                        file_name = file_path.split("/")[-1]
+
+                        msg = build_artifact(
+                            stage_id="summary",
+                            artifact_id=f"summary-{request.session_id}", # 使用 session_id 构造唯一ID
+                            artifact_name="总结报告",
+                            artifact_type="summary_report",
+                            content=file_name,  # 只包含文件名
+                            source="知识库检索",
+                            scope="STAGE"
+                        )
                         yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
 
                     # 总结阶段完成

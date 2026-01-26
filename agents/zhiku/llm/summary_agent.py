@@ -145,6 +145,7 @@ class SummaryAgent:
             tool_calls = []
             current_tool_call = None
             write_file_called = False
+            file_path = ""  # 初始化文件路径
 
             # 流式输出
             async for chunk in response:
@@ -192,8 +193,6 @@ class SummaryAgent:
                         function_args = json.loads(arguments_str)
                         
                         # 确保 session_id 正确
-                        # 1. 如果没传，强制赋值
-                        # 2. 如果传了但是是错的（比如 "{session_id}"），强制修正
                         if "session_id" not in function_args or function_args["session_id"] == "{session_id}":
                             logger.warning(f"⚠️ 工具参数 session_id 无效或缺失: {function_args.get('session_id')}, 已强制修正为: {session_id}")
                             function_args["session_id"] = session_id
@@ -207,10 +206,9 @@ class SummaryAgent:
                         
                         if function_name == "write_file":
                             write_file_called = True
+                            file_path = tool_result  # 捕获文件路径
                         
                         logger.info(f"✅ 工具执行结果: {tool_result}")
-                        
-                        # 可以选择性地将工具结果通知给前端，或者只是记录
                         
                 except Exception as e:
                     logger.error(f"❌ 工具执行失败: {e}", exc_info=True)
@@ -219,19 +217,22 @@ class SummaryAgent:
             if not write_file_called and full_content.strip():
                 logger.warning("⚠️ 模型未调用 write_file，触发兜底机制强制保存")
                 try:
-                    tool_result = await TOOL_FUNCTIONS["write_file"](session_id=session_id, content=full_content)
-                    logger.info(f"✅ (兜底) 工具执行结果: {tool_result}")
+                    # 获取返回的路径
+                    file_path = await TOOL_FUNCTIONS["write_file"](session_id=session_id, content=full_content)
+                    logger.info(f"✅ (兜底) 工具执行结果: {file_path}")
                 except Exception as e:
                     logger.error(f"❌ (兜底) 保存文件失败: {e}", exc_info=True)
 
 
             logger.info("✅ 总结生成完成")
 
-            # 发送总结完成事件（包含完整内容）
+            # 发送总结完成事件（包含完整内容和文件路径）
             yield {
                 "type": "summary_complete",
-                "content": full_content
+                "content": full_content,
+                "file_path": file_path
             }
+
         
         except Exception as e:
             logger.error(f"❌ 总结生成出错: {e}", exc_info=True)
