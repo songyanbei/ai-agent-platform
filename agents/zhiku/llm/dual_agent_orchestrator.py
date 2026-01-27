@@ -15,7 +15,7 @@ from shared.utils.logger import setup_logger
 logger = setup_logger("triple_agent_orchestrator")
 
 # 配置: 送入总结和返回参考文献的最大文档数
-MAX_DOCS_FOR_SUMMARY = 5  # 可根据需要调整
+MAX_DOCS_FOR_SUMMARY = 10  # 可根据需要调整
 
 
 class DualAgentOrchestrator:
@@ -159,13 +159,14 @@ class DualAgentOrchestrator:
                                 for item in result["results"]:
                                     # 将网页搜索结果转换为文档格式
                                     doc = Document(
-                                        content=f"{item.get('title', '')}\n\n{item.get('snippet', '')}",
+                                        content=f"{item.get('title', '')}\n\n{item.get('content', '')}",
                                         source=item.get("source", "Web Search"),
                                         knowledge_id=None,  # 网页搜索没有知识库ID
                                         metadata={
                                             "url": item.get("url", ""),
                                             "search_query": query,
-                                            "source_type": "web_search"
+                                            "source_type": "web_search",
+                                            "score": 0.8  # 给网页搜索结果一个较高的默认分数，防止被过滤
                                         }
                                     )
                                     doc_manager.add_document(doc)

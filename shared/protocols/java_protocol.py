@@ -20,7 +20,7 @@ class JavaEventType(str, Enum):
     PLAN_CHANGE = "PLAN_CHANGE"             # 规划变更
     INVOCATION_DECLARED = "INVOCATION_DECLARED"  # 声明调用
     INVOCATION_CHANGE = "INVOCATION_CHANGE"      # 调用变更
-    ARTIFACT = "ARTIFACT"                   # 产物声明
+    ARTIFACT = "ARTIFACT_DECLARED"          # 产物声明
     ARTIFACT_CHANGE = "ARTIFACT_CHANGE"     # 产物变更
     END = "END"                             # 结束
 
@@ -250,7 +250,9 @@ def build_invocation_declared(
     name: str,
     invocation_type: InvocationType = InvocationType.SEARCH,
     executor: str = "retrieval-agent",
-    content: str = ""
+    content: str = "",
+    render_type: str = "STRUCTURED",
+    status: StageStatus = StageStatus.RUNNING
 ) -> Dict[str, Any]:
     """
     构建调用声明消息
@@ -262,6 +264,8 @@ def build_invocation_declared(
         invocation_type: 调用类型
         executor: 执行器
         content: 初始内容
+        render_type: 渲染类型 (FILE | STRUCTURED)
+        status: 初始状态，默认为 RUNNING
         
     Returns:
         Dict: INVOCATION_DECLARED 消息
@@ -277,7 +281,9 @@ def build_invocation_declared(
             "name": name,
             "invocation_type": invocation_type.value,
             "click_effect": "",
-            "content": content
+            "content": content,
+            "render_type": render_type,
+            "status": status.value
         }]
     )
 
@@ -318,7 +324,8 @@ def build_invocation_change_content(
     stage_id: str,
     invocation_id: str,
     content: str,
-    executor: str = "retrieval-agent"
+    executor: str = "retrieval-agent",
+    render_type: str = "STRUCTURED"
 ) -> Dict[str, Any]:
     """
     构建调用内容追加消息
@@ -328,6 +335,7 @@ def build_invocation_change_content(
         invocation_id: 调用ID
         content: 追加的内容
         executor: 执行器
+        render_type: 渲染类型
         
     Returns:
         Dict: INVOCATION_CHANGE 消息
@@ -341,7 +349,8 @@ def build_invocation_change_content(
         ),
         messages=[{
             "change_type": ChangeType.CONTENT_APPEND.value,
-            "content": content
+            "content": content,
+            "render_type": render_type
         }]
     )
 
@@ -350,7 +359,8 @@ def build_invocation_complete(
     stage_id: str,
     invocation_id: str,
     content: str,
-    executor: str = "retrieval-agent"
+    executor: str = "retrieval-agent",
+    render_type: str = "STRUCTURED"
 ) -> Dict[str, Any]:
     """
     构建调用完成消息（状态变更 + 内容追加）
@@ -360,6 +370,7 @@ def build_invocation_complete(
         invocation_id: 调用ID
         content: 结果内容
         executor: 执行器
+        render_type: 渲染类型
         
     Returns:
         Dict: INVOCATION_CHANGE 消息
@@ -378,7 +389,8 @@ def build_invocation_complete(
             },
             {
                 "change_type": ChangeType.CONTENT_APPEND.value,
-                "content": content
+                "content": content,
+                "render_type": render_type
             }
         ]
     )
@@ -396,7 +408,8 @@ def build_artifact(
     content: str,
     source: str = "知识库检索",
     scope: str = "GLOBAL",
-    data_type: str = "STRUCTURED"
+    data_type: str = "FILE",
+    complete: bool = False
 ) -> Dict[str, Any]:
     """
     构建产物消息（ARTIFACT）
@@ -410,6 +423,7 @@ def build_artifact(
         source: 来源
         scope: 作用域（STAGE | GLOBAL）
         data_type: 数据类型（FILE | STRUCTURED）
+        complete: 该阶段是否直接结束
         
     Returns:
         Dict: ARTIFACT 消息
@@ -422,11 +436,13 @@ def build_artifact(
         },
         messages=[{
             "scope": scope,
+            "data_type": data_type,
             "source": source,
             "artifact_id": artifact_id,
             "artifact_name": artifact_name,
             "artifact_type": artifact_type,
-            "content": content
+            "content": content,
+            "complete": complete
         }]
     )
 

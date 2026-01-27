@@ -215,7 +215,7 @@ def _mock_search_results(query: str, num_results: int) -> Dict[str, Any]:
         mock_results.append({
             "title": f"关于「{query}」的搜索结果 {i + 1}",
             "url": f"https://example.com/search/result-{i + 1}",
-            "snippet": f"这是关于「{query}」的第 {i + 1} 条搜索结果摘要。请配置实际的搜索 API 以获取真实结果。",
+            "content": f"这是关于「{query}」的第 {i + 1} 条搜索结果摘要。请配置实际的搜索 API 以获取真实结果。",
             "source": "example.com"
         })
 

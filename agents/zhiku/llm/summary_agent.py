@@ -5,11 +5,11 @@ from openai import AsyncOpenAI
 from typing import AsyncGenerator, Dict, Any
 import json
 import httpx
-
+import time
 from config.settings import get_settings
 from shared.utils.logger import setup_logger
 from shared.utils.document_manager import DocumentManager
-from agents.zhiku.tools.file_ops import AVAILABLE_TOOLS, TOOL_FUNCTIONS
+from agents.zhiku.tools.file_ops import TOOL_FUNCTIONS
 
 logger = setup_logger("summary_agent")
 
@@ -81,24 +81,28 @@ class SummaryAgent:
         # 构建文档上下文(限制文档数量)
         context = doc_manager.get_context_for_llm(max_docs=max_docs)
         logger.info(f"📄 文档上下文长度: {len(context)} 字符")
-        
+        start = time.time()
         # 3. 构建总结提示词
         system_prompt = f"""你是一个专业的研报分析师。你的任务是基于提供的文档生成高质量的分析报告。
 
 **核心要求**：
-1. **必须使用引用**：在答案中用 [1]、[2] 等标注信息来源
-2. **序号对应文档**：[1] 对应第1个文档，[2] 对应第2个文档，依此类推
-3. **基于事实**：只使用文档中的信息，不编造内容
-4. **专业严谨**：使用正式的学术/商业写作风格
+1. **核心结论先行**：报告开头必须包含一个“## 核心结论”章节，用3-5句话高度概括所有分析结果，不要使用引用。
+2. **必须使用引用**：在后续详细分析中用 [1]、[2] 等标注信息来源
+3. **序号对应文档**：[1] 对应第1个文档，[2] 对应第2个文档，依此类推
+4. **基于事实**：只使用文档中的信息，不编造内容
+5. **专业严谨**：使用正式的学术/商业写作风格
 
 **格式要求**：
 - 使用 Markdown 格式
+- 第一部分必须是 `## 核心结论`
 - 结构清晰，分点列出
 - 每个要点都标注来源
 
 **示例**：
-根据文档内容，人工智能在金融领域的应用主要包括：
+## 核心结论
+人工智能在金融领域的应用已趋于成熟，主要集中在风险控制、智能投顾和反欺诈三个方向。通过机器学习和深度学习技术，金融机构显著提升了效率并降低了运营风险。
 
+## 详细分析
 1. **风险控制**[1]：通过机器学习模型预测信用风险...
 2. **智能投顾**[2]：利用深度学习技术提供个性化投资建议...
 3. **反欺诈检测**[1][3]：结合多源数据识别异常交易行为...
@@ -106,10 +110,7 @@ class SummaryAgent:
 ## 参考来源
 以上内容基于文档 [1] [2] [3] 的分析整理。
 
-**重要指令**：
-生成完总结后，你必须调用 `write_file` 工具将总结内容保存到文件中。
-- session_id: {session_id}
-- content: (你刚刚生成的完整总结内容)"""
+"""
 
         user_message = f"""用户问题:{user_query}
 
@@ -117,7 +118,7 @@ class SummaryAgent:
 
 {context}
 
-请基于以上文档内容,详细回答用户问题。回答完成后，请务必调用 write_file 工具保存结果。"""
+请基于以上文档内容,详细回答用户问题。"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -136,16 +137,11 @@ class SummaryAgent:
                 messages=messages,
                 stream=True,
                 temperature=0.7,
-                tools=AVAILABLE_TOOLS,
-                tool_choice="auto"
             )
             
             # 收集完整内容和工具调用
             full_content = ""
-            tool_calls = []
-            current_tool_call = None
-            write_file_called = False
-            file_path = ""  # 初始化文件路径
+            file_path = ""
 
             # 流式输出
             async for chunk in response:
@@ -163,68 +159,24 @@ class SummaryAgent:
                         "content": content
                     }
 
-                # 2. 处理工具调用
-                if delta.tool_calls:
-                    for tool_call_chunk in delta.tool_calls:
-                        if len(tool_calls) <= tool_call_chunk.index:
-                            # 新的工具调用
-                            tool_calls.append({
-                                "id": tool_call_chunk.id,
-                                "function": {
-                                    "name": tool_call_chunk.function.name,
-                                    "arguments": ""
-                                },
-                                "type": tool_call_chunk.type
-                            })
-                        
-                        # 追加参数
-                        if tool_call_chunk.function.arguments:
-                            tool_calls[tool_call_chunk.index]["function"]["arguments"] += tool_call_chunk.function.arguments
+
 
             # 3. 处理流结束后的工具调用执行
-            for tool_call in tool_calls:
-                function_name = tool_call["function"]["name"]
-                arguments_str = tool_call["function"]["arguments"]
-                
-                logger.info(f"🛠️ 检测到工具调用: {function_name}")
-                
+            # 3. 自动保存总结内容
+            if full_content.strip():
+                logger.info("📝 自动保存总结内容到文件...")
                 try:
-                    if function_name in TOOL_FUNCTIONS:
-                        function_args = json.loads(arguments_str)
-                        
-                        # 确保 session_id 正确
-                        if "session_id" not in function_args or function_args["session_id"] == "{session_id}":
-                            logger.warning(f"⚠️ 工具参数 session_id 无效或缺失: {function_args.get('session_id')}, 已强制修正为: {session_id}")
-                            function_args["session_id"] = session_id
-                        
-                        # 如果内容为空，把累积的内容填进去 (防呆设计)
-                        if "content" not in function_args or not function_args["content"]:
-                            function_args["content"] = full_content
-
-                        # 执行工具
-                        tool_result = await TOOL_FUNCTIONS[function_name](**function_args)
-                        
-                        if function_name == "write_file":
-                            write_file_called = True
-                            file_path = tool_result  # 捕获文件路径
-                        
-                        logger.info(f"✅ 工具执行结果: {tool_result}")
-                        
+                    # 直接调用 write_file 工具
+                    file_path = await TOOL_FUNCTIONS["write_file"](session_id=session_id, content=full_content.strip())
+                    logger.info(f"✅ 文件保存成功: {file_path}")
                 except Exception as e:
-                    logger.error(f"❌ 工具执行失败: {e}", exc_info=True)
-
-            # 4. 兜底机制：如果模型没有调用 write_file，强制调用
-            if not write_file_called and full_content.strip():
-                logger.warning("⚠️ 模型未调用 write_file，触发兜底机制强制保存")
-                try:
-                    # 获取返回的路径
-                    file_path = await TOOL_FUNCTIONS["write_file"](session_id=session_id, content=full_content)
-                    logger.info(f"✅ (兜底) 工具执行结果: {file_path}")
-                except Exception as e:
-                    logger.error(f"❌ (兜底) 保存文件失败: {e}", exc_info=True)
+                    logger.error(f"❌ 保存文件失败: {e}", exc_info=True)
+                    file_path = f"Error saving file: {str(e)}"
 
 
             logger.info("✅ 总结生成完成")
+            end = time.time()
+            logger.info(f"   总结耗时: {end - start:.2f} 秒")
 
             # 发送总结完成事件（包含完整内容和文件路径）
             yield {

@@ -39,13 +39,13 @@ router = APIRouter()
 class QueryRequest(BaseModel):
     """查询请求模型"""
     query: str
-    session_id: str  # 新增 session_id 字段
+    sessionId: str  # 新增 sessionId 字段
     
     class Config:
         json_schema_extra = {
             "example": {
                 "query": "分析人工智能在金融行业的应用趋势",
-                "session_id": "session-001"
+                "sessionId": "session-001"
             }
         }
 
@@ -83,7 +83,7 @@ async def query_with_tools(request: QueryRequest):
                 yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
 
             # ========== 1. 调用三智能体协调器 ==========
-            async for event in orchestrator.process(query, request.session_id):
+            async for event in orchestrator.process(query, request.sessionId):
                 event_type = event.get("type")
                 
                 # ========== 规划阶段 ==========
@@ -135,7 +135,8 @@ async def query_with_tools(request: QueryRequest):
                         stage_id="retrieval",
                         invocation_id=invocation_id,
                         name=f"正在查询{kb_name}: {query_text[:30]}...",
-                        invocation_type=InvocationType.SEARCH
+                        invocation_type=InvocationType.SEARCH,
+                        render_type="STRUCTURED"
                     )
                     yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
                 
@@ -183,7 +184,8 @@ async def query_with_tools(request: QueryRequest):
                     msg = build_invocation_complete(
                         stage_id="retrieval",
                         invocation_id=invocation_id,
-                        content=content
+                        content=content,
+                        render_type="STRUCTURED"
                     )
                     yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
                 
@@ -218,7 +220,8 @@ async def query_with_tools(request: QueryRequest):
                         invocation_id=invocation_id,
                         name=f"网页搜索: {query[:30]}...",
                         invocation_type=InvocationType.SEARCH,
-                        executor="web-search-agent"
+                        executor="web-search-agent",
+                        render_type="STRUCTURED"
                     )
                     yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
 
@@ -260,7 +263,8 @@ async def query_with_tools(request: QueryRequest):
                         stage_id="web_search",
                         invocation_id=invocation_id,
                         content=content,
-                        executor="web-search-agent"
+                        executor="web-search-agent",
+                        render_type="STRUCTURED"
                     )
                     yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
 
@@ -287,14 +291,45 @@ async def query_with_tools(request: QueryRequest):
                 # ========== 总结阶段 ==========
                 elif event_type == "content":
                     # 流式输出正文 - 使用 STREAM_CONTENT
-                    msg = build_stream_content(event["content"])
-                    yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
+                    # [MODIFIED] 不再直接流式输出正文，而是等完成后输出提示
+                    # msg = build_stream_content(event["content"])
+                    # yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
+                    pass
                 
                 
                 # ========== 总结完成 ==========
                 elif event_type == "summary_complete":
                     # 1. 确保最后的内容输出（如果有剩余）
                     # summary_agent 已经在 content 事件里流式输出了，这里不需要再补
+                    
+                    # [NEW] 模拟流式输出完成提示 (提取核心结论)
+                    content = event.get("content", "")
+                    final_msg = ""
+                    
+                    # 尝试提取 "## 核心结论"
+                    if "## 核心结论" in content:
+                        try:
+                            parts = content.split("## 核心结论")
+                            if len(parts) > 1:
+                                section = parts[1]
+                                # 找到下一个标题 (##)
+                                next_header_idx = section.find("##")
+                                if next_header_idx != -1:
+                                    final_msg = section[:next_header_idx].strip()
+                                else:
+                                    final_msg = section.strip()
+                        except Exception as e:
+                            logger.error(f"提取核心结论失败: {e}")
+                            
+                    # 兜底：如果提取失败或为空，使用默认提示
+                    if not final_msg:
+                        query_short = request.query[:20] + "..." if len(request.query) > 20 else request.query
+                        final_msg = f"已完成关于“{query_short}”的情报收集与分析工作"
+                    
+                    for char in final_msg:
+                         await asyncio.sleep(0.05)
+                         msg = build_stream_content(char)
+                         yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
                     
                     # 2. 获取文件路径
                     file_path = event.get("file_path", "")
@@ -307,7 +342,7 @@ async def query_with_tools(request: QueryRequest):
 
                         msg = build_artifact(
                             stage_id="summary",
-                            artifact_id=f"summary-{request.session_id}", # 使用 session_id 构造唯一ID
+                            artifact_id=f"summary-{request.sessionId}", # 使用 sessionId 构造唯一ID
                             artifact_name="总结报告",
                             artifact_type="summary_report",
                             content=file_name,  # 只包含文件名

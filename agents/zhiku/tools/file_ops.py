@@ -11,17 +11,17 @@ logger = logging.getLogger("file_ops")
 
 # 初始化 MinIO 客户端
 settings = get_settings()
-# try:
-#     minio_client = Minio(
-#         settings.minio_endpoint,
-#         access_key=settings.minio_access_key,
-#         secret_key=settings.minio_secret_key,
-#         secure=settings.minio_secure
-#     )
-#     logger.info(f"MinIO 客户端初始化完成: {settings.minio_endpoint}")
-# except Exception as e:
-#     logger.error(f"MinIO 客户端初始化失败: {e}")
-#     minio_client = None
+try:
+    minio_client = Minio(
+        settings.minio_endpoint,
+        access_key=settings.minio_access_key,
+        secret_key=settings.minio_secret_key,
+        secure=settings.minio_secure
+    )
+    logger.info(f"MinIO 客户端初始化完成: {settings.minio_endpoint}")
+except Exception as e:
+    logger.error(f"MinIO 客户端初始化失败: {e}")
+    minio_client = None
 
 async def write_file(session_id: str, content: str) -> str:
     """
@@ -43,22 +43,22 @@ async def write_file(session_id: str, content: str) -> str:
     
     try:
         # 1. 确保 Bucket 存在
-        # if not minio_client.bucket_exists(bucket_name):
-        #     minio_client.make_bucket(bucket_name)
-        #     logger.info(f"创建 Bucket: {bucket_name}")
+        if not minio_client.bucket_exists(bucket_name):
+            minio_client.make_bucket(bucket_name)
+            logger.info(f"创建 Bucket: {bucket_name}")
             
-        # # 2. 准备数据流
-        # data = content.encode('utf-8')
-        # data_stream = io.BytesIO(data)
+        # 2. 准备数据流
+        data = content.encode('utf-8')
+        data_stream = io.BytesIO(data)
         
-        # # 3. 上传文件
-        # minio_client.put_object(
-        #     bucket_name,
-        #     object_name,
-        #     data_stream,
-        #     length=len(data),
-        #     content_type="text/markdown"
-        # )
+        # 3. 上传文件
+        minio_client.put_object(
+            bucket_name,
+            object_name,
+            data_stream,
+            length=len(data),
+            content_type="text/markdown"
+        )
             
         logger.info(f"成功上传文件到 MinIO: {bucket_name}/{object_name}")
         # 返回 MinIO 文件路径
